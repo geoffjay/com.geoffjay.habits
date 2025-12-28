@@ -1,8 +1,8 @@
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
-import '../screens/home_screen.dart';
 import '../screens/login_screen.dart';
+import '../widgets/app_shell.dart';
 
 class AppRouter {
   final AuthProvider authProvider;
@@ -39,7 +39,7 @@ class AppRouter {
       ),
       GoRoute(
         path: '/home',
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => const AppShell(),
       ),
     ],
   );

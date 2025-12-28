@@ -28,6 +28,17 @@ class AuthService {
 
   RecordModel? get currentUser => _pb.authStore.record;
 
+  String? get currentUserAvatarUrl {
+    final user = currentUser;
+    if (user == null) return null;
+
+    final avatar = user.getStringValue('avatar');
+    if (avatar.isEmpty) return null;
+
+    // PocketBase file URL format: {baseUrl}/api/files/{collectionId}/{recordId}/{filename}
+    return _pb.files.getUrl(user, avatar).toString();
+  }
+
   Future<void> restoreSession() async {
     final authData = await _storage.read(key: _authKey);
     if (authData != null) {

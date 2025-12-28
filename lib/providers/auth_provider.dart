@@ -25,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isLoading => _status == AuthStatus.loading;
   RecordModel? get currentUser => _authService.currentUser;
+  String? get avatarUrl => _authService.currentUserAvatarUrl;
 
   Future<void> initialize() async {
     _status = AuthStatus.loading;
