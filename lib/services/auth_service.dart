@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config/environment.dart';
 
@@ -99,39 +99,21 @@ class AuthService {
   }
 
   Future<RecordModel> loginWithGithub() async {
-    const githubRedirectUri = 'http://localhost/callback';
-
-    final authMethods = await _pb.collection('users').listAuthMethods();
-    final providerConfig = authMethods.oauth2.providers.firstWhere(
-      (p) => p.name == 'github',
-      orElse: () => throw Exception('GitHub provider not configured in PocketBase'),
-    );
-
-    final authUrl = Uri.parse(providerConfig.authURL).replace(
-      queryParameters: {
-        ...Uri.parse(providerConfig.authURL).queryParameters,
-        'redirect_uri': githubRedirectUri,
-      },
-    );
-
-    final result = await FlutterWebAuth2.authenticate(
-      url: authUrl.toString(),
-      callbackUrlScheme: 'http',
-    );
-
-    final uri = Uri.parse(result);
-    final code = uri.queryParameters['code'];
-
-    if (code == null) {
-      throw Exception('OAuth code not found in callback');
-    }
-
-    final authData = await _pb.collection('users').authWithOAuth2Code(
-          'github',
-          code,
-          providerConfig.codeVerifier,
-          githubRedirectUri,
+    // Use PocketBase's built-in OAuth2 flow with realtime subscription
+    // GitHub callback URL must be set to: {POCKETBASE_URL}/api/oauth2-redirect
+    // e.g., https://admin.geoffjay.com/api/oauth2-redirect
+    final authData = await _pb.collection('users').authWithOAuth2(
+      'github',
+      (url) async {
+        // Open the OAuth URL in the browser
+        // PocketBase handles the redirect and sends result via realtime
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
         );
+      },
+      scopes: ['read:user', 'user:email'],
+    );
 
     await _saveSession();
     return authData.record;
