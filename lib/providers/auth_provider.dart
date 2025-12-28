@@ -83,20 +83,30 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> loginWithGoogle() async {
-    return _loginWithOAuth('google');
-  }
-
-  Future<bool> loginWithGithub() async {
-    return _loginWithOAuth('github');
-  }
-
-  Future<bool> _loginWithOAuth(String provider) async {
     _status = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await _authService.loginWithOAuth(provider);
+      await _authService.loginWithGoogle();
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _status = AuthStatus.error;
+      _errorMessage = _parseError(e);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loginWithGithub() async {
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _authService.loginWithGithub();
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;

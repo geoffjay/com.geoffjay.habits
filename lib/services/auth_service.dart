@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import '../config/environment.dart';
@@ -11,10 +12,15 @@ class AuthService {
 
   final PocketBase _pb;
   final FlutterSecureStorage _storage;
+  final GoogleSignIn _googleSignIn;
 
   AuthService()
       : _pb = PocketBase(Environment.pocketbaseUrl),
-        _storage = const FlutterSecureStorage();
+        _storage = const FlutterSecureStorage(),
+        _googleSignIn = GoogleSignIn(
+          scopes: ['email', 'profile'],
+          serverClientId: Environment.googleServerClientId,
+        );
 
   PocketBase get pb => _pb;
 
@@ -68,23 +74,49 @@ class AuthService {
     return loginWithEmail(email, password);
   }
 
-  Future<RecordModel> loginWithOAuth(String provider) async {
+  Future<RecordModel> loginWithGoogle() async {
+    final googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) {
+      throw Exception('Google sign-in was cancelled');
+    }
+
+    final serverAuthCode = googleUser.serverAuthCode;
+    if (serverAuthCode == null) {
+      throw Exception('Failed to get server auth code from Google');
+    }
+
+    // Native Google Sign-In doesn't use PKCE, so we pass empty code verifier
+    // For installed apps, use the OOB redirect URI
+    final authData = await _pb.collection('users').authWithOAuth2Code(
+          'google',
+          serverAuthCode,
+          '', // No code verifier for native sign-in
+          'urn:ietf:wg:oauth:2.0:oob', // Standard redirect for installed apps
+        );
+
+    await _saveSession();
+    return authData.record;
+  }
+
+  Future<RecordModel> loginWithGithub() async {
+    const githubRedirectUri = 'http://localhost/callback';
+
     final authMethods = await _pb.collection('users').listAuthMethods();
     final providerConfig = authMethods.oauth2.providers.firstWhere(
-      (p) => p.name == provider,
-      orElse: () => throw Exception('Provider $provider not found'),
+      (p) => p.name == 'github',
+      orElse: () => throw Exception('GitHub provider not configured in PocketBase'),
     );
 
     final authUrl = Uri.parse(providerConfig.authURL).replace(
       queryParameters: {
         ...Uri.parse(providerConfig.authURL).queryParameters,
-        'redirect_uri': Environment.oauthCallbackUrl,
+        'redirect_uri': githubRedirectUri,
       },
     );
 
     final result = await FlutterWebAuth2.authenticate(
       url: authUrl.toString(),
-      callbackUrlScheme: Environment.oauthCallbackScheme,
+      callbackUrlScheme: 'http',
     );
 
     final uri = Uri.parse(result);
@@ -95,10 +127,10 @@ class AuthService {
     }
 
     final authData = await _pb.collection('users').authWithOAuth2Code(
-          provider,
+          'github',
           code,
           providerConfig.codeVerifier,
-          Environment.oauthCallbackUrl,
+          githubRedirectUri,
         );
 
     await _saveSession();
@@ -106,6 +138,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    await _googleSignIn.signOut();
     _pb.authStore.clear();
     await _clearSession();
   }
